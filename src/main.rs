@@ -211,6 +211,91 @@ fn buscar_vuelo<'a>(nodo: &'a Option<Box<Nodo>>, altitud: u32) -> Option<&'a Vue
         }
     }
 }
+// FASE 3: ELIMINACIÓN DE VUELO (Aterrizaje)
+// casos: sin hijos, un hijo, dos hijos.
+// Tras eliminar, recalcula alturas y rebalancea el árbol.
+
+// Función auxiliar: encuentra y extrae el predecesor in-order
+// (el nodo con mayor altitud del subárbol izquierdo)
+fn extraer_predecesor(nodo: &mut Box<Nodo>) -> Vuelo {
+    // Si no hay hijo derecho, este nodo ES el predecesor
+    if nodo.derecho.is_none() {
+        // Retornamos una copia del vuelo (el predecesor)
+        return nodo.vuelo.clone();
+    }
+    // Si hay hijo derecho, seguimos bajando a la derecha
+    let resultado = extraer_predecesor(nodo.derecho.as_mut().unwrap());
+    actualizar_altura(nodo);
+    resultado
+}
+
+fn eliminar_vuelo(nodo_opt: Option<Box<Nodo>>, altitud: u32) -> Option<Box<Nodo>> {
+    let mut nodo = match nodo_opt {
+        // Si el nodo es None, la altitud no existe en el radar
+        None => return None,
+        Some(n) => n,
+    };
+
+    if altitud < nodo.vuelo.altitud {
+        // El vuelo a eliminar está en el subárbol izquierdo
+        nodo.izquierdo = eliminar_vuelo(nodo.izquierdo.take(), altitud);
+    } else if altitud > nodo.vuelo.altitud {
+        // El vuelo a eliminar está en el subárbol derecho
+        nodo.derecho = eliminar_vuelo(nodo.derecho.take(), altitud);
+    } else {
+        // Encontramos el nodo a eliminar
+
+        // CASO 1: Sin hijos (nodo hoja) → simplemente eliminamos
+        if nodo.izquierdo.is_none() && nodo.derecho.is_none() {
+            return None;
+        }
+
+        // CASO 2: Solo hijo derecho → lo reemplazamos con él
+        if nodo.izquierdo.is_none() {
+            return nodo.derecho.take();
+        }
+
+        // CASO 3: Solo hijo izquierdo → lo reemplazamos con él
+        if nodo.derecho.is_none() {
+            return nodo.izquierdo.take();
+        }
+
+        // CASO 4: Dos hijos → usamos el predecesor in-order
+        // (el vuelo con mayor altitud del subárbol izquierdo)
+        let predecesor = extraer_predecesor(nodo.izquierdo.as_mut().unwrap());
+        // Eliminamos el predecesor del subárbol izquierdo
+        nodo.izquierdo = eliminar_vuelo(nodo.izquierdo.take(), predecesor.altitud);
+        // Reemplazamos el vuelo del nodo actual con el predecesor
+        nodo.vuelo = predecesor;
+    }
+
+    // Recalculamos altura y rebalanceamos
+    actualizar_altura(&mut nodo);
+    let balance = obtener_balance(&nodo);
+
+    // Caso Izquierda-Izquierda
+    if balance > 1 && obtener_balance(nodo.izquierdo.as_ref().unwrap()) >= 0 {
+        return Some(rotar_derecha(nodo));
+    }
+    // Caso Izquierda-Derecha
+    if balance > 1 && obtener_balance(nodo.izquierdo.as_ref().unwrap()) < 0 {
+        let hijo_izq = nodo.izquierdo.take().unwrap();
+        nodo.izquierdo = Some(rotar_izquierda(hijo_izq));
+        return Some(rotar_derecha(nodo));
+    }
+    // Caso Derecha-Derecha
+    if balance < -1 && obtener_balance(nodo.derecho.as_ref().unwrap()) <= 0 {
+        return Some(rotar_izquierda(nodo));
+    }
+    // Caso Derecha-Izquierda
+    if balance < -1 && obtener_balance(nodo.derecho.as_ref().unwrap()) > 0 {
+        let hijo_der = nodo.derecho.take().unwrap();
+        nodo.derecho = Some(rotar_derecha(hijo_der));
+        return Some(rotar_izquierda(nodo));
+    }
+
+    Some(nodo)
+}
 
 fn main() {
     let mut radar: Option<Box<Nodo>> = None;
@@ -252,5 +337,23 @@ fn main() {
     match buscar_vuelo(&radar, 6000) {
         Some(v) => println!("Vuelo encontrado: ID={}, Altitud={}", v.id, v.altitud),
         None => println!("Vuelo no encontrado en altitud 6000"),
+    }
+    // --- FASE 3: Pruebas de eliminación ---
+    println!("\n--- Aterrizaje de Vuelos ---");
+
+    // Eliminamos el vuelo UA456 (altitud 3000) - tiene dos hijos
+    println!("Aterrizando vuelo en altitud 3000...");
+    radar = eliminar_vuelo(radar.take(), 3000);
+
+    // Verificamos que ya no existe
+    match buscar_vuelo(&radar, 3000) {
+        Some(v) => println!("Vuelo aún en radar: ID={}", v.id),
+        None => println!("Vuelo 3000 removido del radar correctamente"),
+    }
+
+    // Verificamos que el árbol sigue balanceado buscando otros vuelos
+    match buscar_vuelo(&radar, 4000) {
+        Some(v) => println!("Árbol balanceado, vuelo encontrado: ID={}", v.id),
+        None => println!("Error: vuelo 4000 no encontrado"),
     }
 }
