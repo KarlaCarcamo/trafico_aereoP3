@@ -296,6 +296,27 @@ fn eliminar_vuelo(nodo_opt: Option<Box<Nodo>>, altitud: u32) -> Option<Box<Nodo>
 
     Some(nodo)
 }
+// FASE 4: VUELO DE EMERGENCIA (Menor altitud)
+// El vuelo más cercano a tierra SIEMPRE está en el nodo
+// más a la izquierda del árbol. No necesitamos recorrer
+// todo el árbol, solo bajamos por la izquierda. O(log n) yendonos por la opcion b
+// =============================================================
+fn vuelo_menor_altitud(nodo: &Option<Box<Nodo>>) -> Option<&Vuelo> {
+    match nodo {
+        // Árbol vacío, no hay vuelos en el radar
+        None => None,
+
+        Some(n) => {
+            if n.izquierdo.is_none() {
+                // No hay hijo izquierdo: este ES el vuelo más bajo
+                Some(&n.vuelo)
+            } else {
+                // Seguimos bajando por la izquierda
+                vuelo_menor_altitud(&n.izquierdo)
+            }
+        }
+    }
+}
 
 fn main() {
     let mut radar: Option<Box<Nodo>> = None;
@@ -355,5 +376,15 @@ fn main() {
     match buscar_vuelo(&radar, 4000) {
         Some(v) => println!("Árbol balanceado, vuelo encontrado: ID={}", v.id),
         None => println!("Error: vuelo 4000 no encontrado"),
+    }
+    // --- FASE 4: Vuelo de emergencia ---
+    println!("\n--- Alerta de Emergencia ---");
+
+    match vuelo_menor_altitud(&radar) {
+        Some(v) => println!(
+            "Vuelo más cercano a tierra: ID={}, Altitud={} pies",
+            v.id, v.altitud
+        ),
+        None => println!("No hay vuelos en el radar"),
     }
 }
